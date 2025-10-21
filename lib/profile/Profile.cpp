@@ -10,6 +10,7 @@
 //#include <cctype>
 #include <cmath>
 #include <algorithm>
+#include <vector>
 #include <ctime>
 #include <chrono>
 #include <random>
@@ -865,10 +866,23 @@ void Profile::normParas(bool isLoaded) {
 		qualityDist[i].normalize(0);
 	}
 	
-	if(!isLoaded) {
-		int maxCount = 0;
-		j = 0;
-		for(i = 0; i < iSizeDist.getCOLS(); i++) {
+        if(!isLoaded) {
+                // --- FIX START: enforce initialised substitution matrices ---
+                for (int i = 0; i < kmerCount; i++) {
+                        if (subsDist1[i].getEntrance() == nullptr) {
+                                subsDist1[i].resize(binCount, N, false);
+                                subsDist1[i].fill(0.0);
+                        }
+                        if (subsDist2[i].getEntrance() == nullptr) {
+                                subsDist2[i].resize(binCount, N, false);
+                                subsDist2[i].fill(0.0);
+                        }
+                }
+                // --- FIX END ---
+
+                int maxCount = 0;
+                j = 0;
+                for(i = 0; i < iSizeDist.getCOLS(); i++) {
 			if(iSizeDist.get(0, i) > maxCount) {
 				maxCount = iSizeDist.get(0, i);
 				j = i;
@@ -1255,7 +1269,7 @@ void Profile::saveResults() {
 	}
 	
 	string bases = config.getStringPara("bases");
-	int N = bases.length();
+	const int baseCount = bases.length();
 	int kmer = config.getIntPara("kmer");
 	int binCount = config.getIntPara("bins");
 	int readLength = config.getIntPara("readLength");
@@ -1305,36 +1319,56 @@ void Profile::saveResults() {
 	}
 	(*ost) << delFreqs.get(0, k-1) << endl;
 	
-	(*ost) << "\n[Substitution Probs]" << endl;
-	for(i = 0; i < kmerCount; i++) {
-		(*ost) << "kmer: " << kmers[i] << endl;
-		p = subsDist1[i].getEntrance();
-		for(j = 0; j < binCount; j++) {
-			for(k = 0; k < N; k++)  {
-				if(k < N-1) {
-					(*ost) << p[j*N+k] << '\t';
-				}
-				else {
-					(*ost) << p[j*N+k] << endl;
-				}
-			}
-		}
-		p = subsDist2[i].getEntrance();
-		for(j = 0; j < binCount; j++) {
-			for(k = 0; k < N; k++)  {
-				if(k < N-1) {
-					(*ost) << p[j*N+k] << '\t';
-				}
-				else {
-					(*ost) << p[j*N+k] << endl;
-				}
-			}
-		}
-	}
+        // --- FIX START: safer writing of [Substitution Probs] ---
+        (*ost) << "\n[Substitution Probs]" << endl;
+
+        for (int i = 0; i < kmerCount; i++) {
+                (*ost) << "kmer: " << kmers[i] << endl;
+
+                // number of bases (e.g., 4 for ACGT)
+                int N = bases.length();
+                std::vector<double> zeroBuf(binCount * N, 0.0);
+                double* p = nullptr;
+
+                // --- subsDist1 ---
+                if (subsDist1[i].getEntrance() != nullptr) {
+                        p = subsDist1[i].getEntrance();
+                } else {
+                        std::cerr << "Warning: missing substitution matrix for kmer "
+                                  << kmers[i] << " (subsDist1), filling with zeros." << std::endl;
+                        p = zeroBuf.data();
+                }
+
+                for (int j = 0; j < binCount; j++) {
+                        for (int k = 0; k < N; k++) {
+                                (*ost) << p[j * N + k];
+                                if (k < N - 1) (*ost) << '\t';
+                        }
+                        (*ost) << '\n';
+                }
+
+                // --- subsDist2 ---
+                if (subsDist2[i].getEntrance() != nullptr) {
+                        p = subsDist2[i].getEntrance();
+                } else {
+                        std::cerr << "Warning: missing substitution matrix for kmer "
+                                  << kmers[i] << " (subsDist2), filling with zeros." << std::endl;
+                        p = zeroBuf.data();
+                }
+
+                for (int j = 0; j < binCount; j++) {
+                        for (int k = 0; k < N; k++) {
+                                (*ost) << p[j * N + k];
+                                if (k < N - 1) (*ost) << '\t';
+                        }
+                        (*ost) << '\n';
+                }
+        }
+        // --- FIX END ---
 	
 	(*ost) << "\n[Base Quality Distribution]" << endl;
 	int baseQualtiyCount = maxBaseQuality-minBaseQuality+1;
-	for(i = 0; i < N*N; i++) {
+	for(i = 0; i < baseCount*baseCount; i++) {
 		(*ost) << "basePairIndx: " << i << endl;
 		p = qualityDist[i].getEntrance();
 		for(j = 0; j < binCount; j++) {
