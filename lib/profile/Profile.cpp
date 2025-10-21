@@ -1526,11 +1526,19 @@ void Profile::train() {
     for (int i = 0; i < kmerCount; i++) {
         if (subsDist1[i].getEntrance() == nullptr) {
             subsDist1[i].resize(binCount, N, false);
-            subsDist1[i].fill(0.0);
+            for (int r = 0; r < binCount; r++) {
+                for (int c = 0; c < N; c++) {
+                    subsDist1[i].set(r, c, 0.0);
+                }
+            }
         }
         if (subsDist2[i].getEntrance() == nullptr) {
             subsDist2[i].resize(binCount, N, false);
-            subsDist2[i].fill(0.0);
+            for (int r = 0; r < binCount; r++) {
+                for (int c = 0; c < N; c++) {
+                    subsDist2[i].set(r, c, 0.0);
+                }
+            }
         }
     }
     // --- FIX END ---
