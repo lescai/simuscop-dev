@@ -1482,47 +1482,61 @@ void Profile::train(string proFile) {
 }
 
 void Profile::train() {
-	string bamFile = config.getStringPara("bam");
-	string samtools = config.getStringPara("samtools");
-	if(samtools.empty()) {
-		samtools = "samtools";
-	}
-	string cmd = samtools + " view -F 0xD04 -q 20 " + bamFile;
-	FILE* fp = popen(cmd.c_str(), "r");
-	if(!fp) {
-		cerr << "cannot open BAM file " << bamFile << endl;
-		exit(-1);
-    	}
-	
-	char buf[2500000];
-	long count = 0;
-	int ret;
-	while(fgets(buf , 2500000 , fp)) {
-		buf[strlen(buf)-1] = '\0';
-		ret = processRead(buf);
-		if(ret == 2) {
-			count++;			
-			break;
-		}
-		else {
-			count += ret;
-		}
-	}
-	fclose(fp);
+    string bamFile = config.getStringPara("bam");
+    string samtools = config.getStringPara("samtools");
+    if (samtools.empty()) {
+        samtools = "samtools";
+    }
+    string cmd = samtools + " view -F 0xD04 -q 20 " + bamFile;
+    FILE* fp = popen(cmd.c_str(), "r");
+    if (!fp) {
+        cerr << "cannot open BAM file " << bamFile << endl;
+        exit(-1);
+    }
 
-	int wxs = (genome.getInTargets().empty())? 0:1;
-	long minReadsRequired = 2000000;
-	double med_rc = median(readCounts);
-	// if((wxs == 0 && count < minReadsRequired) || (wxs == 1 && count < 2*minReadsRequired)) {
-	if(med_rc < 5) {
-		cerr << "\nWarning: no enough reads to evaluate GC-content effects!" << endl;		
-		initGCParas();
-	}
-	else {	
-		estimateGCParas();
-	}
-	normParas(false);
-	saveResults();
+    char buf[2500000];
+    long count = 0;
+    int ret;
+    while (fgets(buf, 2500000, fp)) {
+        buf[strlen(buf) - 1] = '\0';
+        ret = processRead(buf);
+        if (ret == 2) {
+            count++;
+            break;
+        } else {
+            count += ret;
+        }
+    }
+    fclose(fp);
+
+    int wxs = (genome.getInTargets().empty()) ? 0 : 1;
+    long minReadsRequired = 2000000;
+    double med_rc = median(readCounts);
+    if (med_rc < 5) {
+        cerr << "\nWarning: not enough reads to evaluate GC-content effects!" << endl;
+        initGCParas();
+    } else {
+        estimateGCParas();
+    }
+
+    // --- FIX START: enforce population of all k-mer substitution matrices ---
+    string bases = config.getStringPara("bases");
+    int binCount = config.getIntPara("bins");
+    int N = bases.length();
+    for (int i = 0; i < kmerCount; i++) {
+        if (subsDist1[i].getEntrance() == nullptr) {
+            subsDist1[i].resize(binCount, N, false);
+            subsDist1[i].fill(0.0);
+        }
+        if (subsDist2[i].getEntrance() == nullptr) {
+            subsDist2[i].resize(binCount, N, false);
+            subsDist2[i].fill(0.0);
+        }
+    }
+    // --- FIX END ---
+
+    normParas(false);
+    saveResults();
 }
 
 int Profile::yieldInsertSize() {
