@@ -1407,72 +1407,90 @@ void Profile::saveResults() {
 }
 
 void Profile::initCDFs() {	
-	unsigned int i, j, l;
-	
-	string bases = config.getStringPara("bases");
-	int N = bases.length();
-	int binCount = config.getIntPara("bins");
-	
-	//insert
-	insCdf = insFreqs.cumsum();
-	
-	//deletion
-	delCdf = delFreqs.cumsum();
-	
-	//baseQuality
-	int quality_th = 20;
-	int baseQualtiyCount = maxBaseQuality-minBaseQuality+1;
-	for(i = 0; i < N*N; i++) {
-		//qualityDist[i].normalize(0);
-		/*
-		if(i%(N+1) == 0) {
-			for(j = 0; j < quality_th; j++) {
-				qualityDist[i].setCol(j, 0.0);
-			}
-		}
-		else {
-			for(j = quality_th; j < baseQualtiyCount; j++) {
-				qualityDist[i].setCol(j, 0.0);
-			}
-		}
-		*/
-		qualityDist[i].normalize(0);
-		qualityCdf[i] = qualityDist[i].cumsum();
-		qualityDist[i].clear();
-	}
-	
-	//insertSize
-	if(config.isPairedEnd() && stdISize > 0) {
-		iSizeCdf = iSizeDist.cumsum();
-		iSizeDist.clear();
-	}
-	
-	//gc
-	for(l = 0; l < 101; l++) {
-		unsigned seed = chrono::system_clock::now().time_since_epoch().count();
-		default_random_engine generator(seed);
-		normal_distribution<double> normal(gcMeans[l], gcStd);
-		gc_generators.push_back(generator);
-		gc_normDists.push_back(normal);
-	}
+    unsigned int i, j, l;
 
-	//subs
-	for(i = 0; i < kmerCount; i++) {
-		subsCdf1[i] = subsDist1[i].cumsum();
-		if(config.isPairedEnd()) {
-			if(stdISize > 0) {
-				subsCdf2[i] = subsDist2[i].cumsum();
-			}
-			else {
-				subsCdf2[i].clear();
-			}
-		}
-		else {
-			subsCdf2[i].clear();
-		}
-		subsDist1[i].clear();
-		subsDist2[i].clear();
-	}
+    // --- Safety checks to prevent invalid array allocation ---
+    if (kmerCount <= 0) {
+        cerr << "Error: invalid kmerCount (" << kmerCount << ") detected during CDF initialization." << endl;
+        kmerCount = 1;
+    }
+    if (config.getIntPara("bins") <= 0) {
+        cerr << "Error: invalid binCount detected during CDF initialization. Resetting to 1." << endl;
+        config.setIntPara("bins", 1);
+    }
+    string bases = config.getStringPara("bases");
+    if (bases.empty()) {
+        cerr << "Error: no base alphabet defined in profile, setting to default 'ACGT'." << endl;
+        config.setStringPara("bases", "ACGT");
+    }
+    int N = bases.length();
+    if (N <= 0) {
+        cerr << "Error: invalid base length (" << N << "), setting to 4." << endl;
+        config.setStringPara("bases", "ACGT");
+        N = 4;
+    }
+    int binCount = config.getIntPara("bins");
+
+    //insert
+    insCdf = insFreqs.cumsum();
+
+    //deletion
+    delCdf = delFreqs.cumsum();
+
+    //baseQuality
+    int quality_th = 20;
+    int baseQualtiyCount = maxBaseQuality-minBaseQuality+1;
+    for(i = 0; i < N*N; i++) {
+        //qualityDist[i].normalize(0);
+        /*
+        if(i%(N+1) == 0) {
+            for(j = 0; j < quality_th; j++) {
+                qualityDist[i].setCol(j, 0.0);
+            }
+        }
+        else {
+            for(j = quality_th; j < baseQualtiyCount; j++) {
+                qualityDist[i].setCol(j, 0.0);
+            }
+        }
+        */
+        qualityDist[i].normalize(0);
+        qualityCdf[i] = qualityDist[i].cumsum();
+        qualityDist[i].clear();
+    }
+
+    //insertSize
+    if(config.isPairedEnd() && stdISize > 0) {
+        iSizeCdf = iSizeDist.cumsum();
+        iSizeDist.clear();
+    }
+
+    //gc
+    for(l = 0; l < 101; l++) {
+        unsigned seed = chrono::system_clock::now().time_since_epoch().count();
+        default_random_engine generator(seed);
+        normal_distribution<double> normal(gcMeans[l], gcStd);
+        gc_generators.push_back(generator);
+        gc_normDists.push_back(normal);
+    }
+
+    //subs
+    for(i = 0; i < kmerCount; i++) {
+        subsCdf1[i] = subsDist1[i].cumsum();
+        if(config.isPairedEnd()) {
+            if(stdISize > 0) {
+                subsCdf2[i] = subsDist2[i].cumsum();
+            }
+            else {
+                subsCdf2[i].clear();
+            }
+        }
+        else {
+            subsCdf2[i].clear();
+        }
+        subsDist1[i].clear();
+        subsDist2[i].clear();
+    }
 }
 
 void Profile::train(string proFile) {
