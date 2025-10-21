@@ -869,15 +869,23 @@ void Profile::normParas(bool isLoaded) {
         if(!isLoaded) {
                 // --- FIX START: enforce initialised substitution matrices ---
                 for (int i = 0; i < kmerCount; i++) {
-                        if (subsDist1[i].getEntrance() == nullptr) {
-                                subsDist1[i].resize(binCount, N, false);
-                                subsDist1[i].fill(0.0);
-                        }
-                        if (subsDist2[i].getEntrance() == nullptr) {
-                                subsDist2[i].resize(binCount, N, false);
-                                subsDist2[i].fill(0.0);
-                        }
-                }
+                         if (subsDist1[i].getEntrance() == nullptr) {
+                             subsDist1[i].resize(binCount, bases.length(), false);
+                             for (int r = 0; r < binCount; r++) {
+                                 for (int c = 0; c < bases.length(); c++) {
+                                     subsDist1[i].set(r, c, 0.0);
+                                 } 
+                             }
+                         } 
+                         if (subsDist2[i].getEntrance() == nullptr) {
+                             subsDist2[i].resize(binCount, bases.length(), false);
+                             for (int r = 0; r < binCount; r++) {
+                                 for (int c = 0; c < bases.length(); c++) {
+                                     subsDist2[i].set(r, c, 0.0);
+                                 }
+                             }
+                         }
+		}
                 // --- FIX END ---
 
                 int maxCount = 0;
