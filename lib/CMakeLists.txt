@@ -1,4 +1,9 @@
 cmake_minimum_required(VERSION 2.8)
+set(CMAKE_CXX_STANDARD 11)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+if(APPLE)
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -stdlib=libc++")
+endif()
 
 # Build the matrix library
 include_directories(matrix)
@@ -57,3 +62,4 @@ target_link_libraries(segment fastahack snp mydefine)
 include_directories(psifunc)
 add_library(psifunc psifunc/psiFunc.cpp)
 target_link_libraries(psifunc)
+

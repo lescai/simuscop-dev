@@ -10,6 +10,7 @@
 #include <map>
 #include <string>
 #include <pthread.h>
+#include <random>   // <--- Added for C++11 random library
 
 #include "Matrix.h"
 
@@ -19,7 +20,7 @@ class KmerIndex {
 	public:
 		int index;
 		map<char, KmerIndex> nextIndexs;
-		KmerIndex() {index = -1;}
+		KmerIndex() { index = -1; }
 };
 
 class Profile {
@@ -60,7 +61,7 @@ class Profile {
 		Matrix<double> iSizeDist;
 		Matrix<double> iSizeCdf;
 		
-		//GC-content bias
+		// GC-content bias
 		double gcMeans[101];
 		double gcStd;
 		vector<default_random_engine> gc_generators;
