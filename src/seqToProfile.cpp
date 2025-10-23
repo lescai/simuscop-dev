@@ -10,7 +10,7 @@
 #include <ctime>
 
 #include <clocale>
-#include <fenv.h>
+// #include <fenv.h>  // <— leave commented out
 
 #include "MyDefine.h"
 #include "Genome.h"
@@ -20,9 +20,10 @@
 void usage(const char* app);
 
 int main(int argc, char *argv[]) {
-    // Force C locale and enable FP exception reporting
+    // Force C locale for consistent number parsing/printing
     setlocale(LC_ALL, "C");
-    // Keep locale enforcement, but don’t trap FP exceptions at runtime.
+    // Do NOT trap FP exceptions in production: we harden math paths instead.
+    // feenableexcept(FE_DIVBYZERO | FE_INVALID | FE_OVERFLOW);
 	string bamFile = "", targetFile = "";
 	string vcfFile = "", refFile = "";
 	string outFile = "", samtools = "";

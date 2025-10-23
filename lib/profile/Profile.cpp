@@ -712,126 +712,136 @@ void Profile::initGCParas() {
 }
 
 void Profile::estimateGCParas() {
-	int i, j, k;
-	
-	int bins = 50;
-	int *counts = new int[bins];
-	memset(counts, 0, bins*sizeof(int));
-	for(i = 0; i < gcs.size(); i++) {
-		j = gcs[i]*bins;
-		counts[j]++;
-	}
-	int expectCount = min(150000, (int) gcs.size())/bins;
-	int *steps = new int[bins];
-	for(i = 0; i < bins; i++) {
-		steps[i] = max(1, counts[i]/expectCount);
-	}
-	delete[] counts;
-	
-	string outFile = config.getStringPara("output");
-	outFile = outFile + ".gc";
-	ofstream ofs;
-	ofs.open(outFile.c_str());
-	vector<int> indxs;
-	int *curCount = new int[bins];
-	double med_rc = median(readCounts);
-	for(i = 0; i < readCounts.size(); i++) {
-		j = gcs[i]*bins;
-		if(curCount[j]%steps[j] == 0) {
-			//readCounts[i] = log(readCounts[i]/med_rc+ZERO_FINAL);
-			readCounts[i] = readCounts[i]/(med_rc+ZERO_FINAL);
-			if(readCounts[i] < 3) {
-				ofs << readCounts[i] << '\t' << gcs[i] << endl;
-				indxs.push_back(i);
-			}
-		}
-		curCount[j]++;
-	}
-	delete[] curCount;
-	delete[] steps;
-	ofs.close();
-	
-	/*fitting locally weighted linear regression*/
-	double tau = 5;
-	double winSize = 0.03;
-	Matrix<double> x(1, 2);
-	x.set(0, 0, 1);
-	int minGC = -1, maxGC = -1;
-	for(k = 0; k <= 100; k++) {
-		double gc = k/100.0;
-		x.set(0, 1, gc);
-		
-		vector<double> gcInWin, rcInWin;
-		for(i = 0; i < indxs.size(); i++) {
-			j = indxs[i];
-			if(fabs(gc-gcs[j]) <= winSize/2) {
-				gcInWin.push_back(gcs[j]);
-				rcInWin.push_back(readCounts[j]);
-			}
-			/*
-			if(gcInWin.size() > 2000) {
-				break;
-			}
-			*/
-		}
-		if(gcInWin.size() > 20) {
-			if(minGC == -1) {
-				minGC = k;
-			}
-			maxGC = k;
-			Matrix<double> B(gcInWin.size(), 2);
-			Matrix<double> y(gcInWin.size(), 1);
-			for(i = 0; i < gcInWin.size(); i++) {
-				B.set(i, 0, 1);
-				B.set(i, 1, gcInWin[i]);
-				y.set(i, 0, rcInWin[i]);
-			}
-			gcInWin.clear();
-			rcInWin.clear();
-			/*
-			cerr << "B:" << endl;
-			B.Print();
-			cerr << "y:" << endl;
-			y.Print();
-			*/
-			Matrix<double> W(B.getROWS(), B.getROWS(), 0);
-			for(i = 0; i < B.getROWS(); i++) {
-				double v = exp(-pow(B.get(i, 1)-gc, 2)/(2*tau));
-				W.set(i, i, v);
-			}
-			//cerr << "W:" << endl;
-			//W.Print();
-			
-			Matrix<double> beta = (B.transpose()*W*B).inverse()*B.transpose()*W*y;
-			//cerr << "beta:" << endl;
-			//beta.Print();
-			Matrix<double> y_predict = x*beta;
-			gcMeans[k] = max(0.0, y_predict.get(0, 0));
-		}
-		else {
-			gcMeans[k] = 0;
-		}
-	}
-	
-	for(k = 0; k < minGC; k++) {
-		gcMeans[k] = gcMeans[minGC]*k/minGC;
-	}
-	for(k = maxGC+1; k <= 100; k++) {
-		gcMeans[k] = gcMeans[maxGC]-gcMeans[maxGC]*(k-maxGC)/(100-maxGC);
-	}
-	
-	/*calculate standrad deviation*/
-	gcStd = 0;
-	for(i = 0; i < indxs.size(); i++) {
-		j = indxs[i];
-		k = gcs[j]*100;
-		gcStd += pow(readCounts[j]-gcMeans[k], 2);
-	}
-	gcStd = sqrt(gcStd/indxs.size());
-	cerr << "\nread counts std: " << gcStd << endl;
-	
-	gcs.clear();
-	readCounts.clear();
+    int i, j, k;
+
+    // Bail out if we have no data to fit
+    if (gcs.empty() || readCounts.empty()) {
+        std::cerr << "Warning: no GC/readCount samples; using default GC parameters." << std::endl;
+        initGCParas();
+        return;
+    }
+
+    int bins = 50;
+    int* counts = new int[bins];
+    memset(counts, 0, bins * sizeof(int));
+    for (i = 0; i < (int)gcs.size(); i++) {
+        j = std::min(std::max((int)(gcs[i] * bins), 0), bins - 1);
+        counts[j]++;
+    }
+
+    int denom = std::max(1, bins);
+    int expectCount = std::max(1, std::min(150000, (int)gcs.size()) / denom);
+
+    int* steps = new int[bins];
+    for (i = 0; i < bins; i++) {
+        steps[i] = std::max(1, counts[i] / expectCount);
+    }
+    delete[] counts;
+
+    string outFile = config.getStringPara("output");
+    outFile = outFile + ".gc";
+    ofstream ofs(outFile.c_str());
+
+    vector<int> indxs;
+    int* curCount = new int[bins];
+    memset(curCount, 0, bins * sizeof(int));
+    double med_rc = median(readCounts);
+
+    for (i = 0; i < (int)readCounts.size(); i++) {
+        j = std::min(std::max((int)(gcs[i] * bins), 0), bins - 1);
+        if (steps[j] <= 0) steps[j] = 1;  // double-guard
+        if (curCount[j] % steps[j] == 0) {
+            double v = (med_rc > 0.0) ? (readCounts[i] / (med_rc + ZERO_FINAL)) : 0.0;
+            if (v < 3) {
+                ofs << v << '\t' << gcs[i] << endl;
+                indxs.push_back(i);
+            }
+        }
+        curCount[j]++;
+    }
+    delete[] curCount;
+    ofs.close();
+
+    if (indxs.size() < 20) {
+        std::cerr << "Warning: insufficient GC windows for robust fit; using defaults." << std::endl;
+        initGCParas();
+        delete[] steps;
+        return;
+    }
+
+    /* fitting locally weighted linear regression */
+    double tau = 5;
+    double winSize = 0.03;
+    Matrix<double> x(1, 2);
+    x.set(0, 0, 1);
+    int minGC = -1, maxGC = -1;
+    for (k = 0; k <= 100; k++) {
+        double gc = k / 100.0;
+        x.set(0, 1, gc);
+
+        vector<double> gcInWin, rcInWin;
+        for (i = 0; i < (int)indxs.size(); i++) {
+            j = indxs[i];
+            if (fabs(gc - gcs[j]) <= winSize / 2) {
+                gcInWin.push_back(gcs[j]);
+                rcInWin.push_back(readCounts[j]);
+            }
+        }
+        if (gcInWin.size() > 20) {
+            if (minGC == -1) {
+                minGC = k;
+            }
+            maxGC = k;
+            Matrix<double> B(gcInWin.size(), 2);
+            Matrix<double> y(gcInWin.size(), 1);
+            for (i = 0; i < (int)gcInWin.size(); i++) {
+                B.set(i, 0, 1);
+                B.set(i, 1, gcInWin[i]);
+                y.set(i, 0, rcInWin[i]);
+            }
+            gcInWin.clear();
+            rcInWin.clear();
+
+            Matrix<double> W(B.getROWS(), B.getROWS(), 0);
+            for (i = 0; i < B.getROWS(); i++) {
+                double v = exp(-pow(B.get(i, 1) - gc, 2) / (2 * tau));
+                W.set(i, i, v);
+            }
+
+            Matrix<double> beta = (B.transpose() * W * B).inverse() * B.transpose() * W * y;
+            Matrix<double> y_predict = x * beta;
+            gcMeans[k] = std::max(0.0, y_predict.get(0, 0));
+        } else {
+            gcMeans[k] = 0;
+        }
+    }
+
+    for (k = 0; k < minGC; k++) {
+        gcMeans[k] = gcMeans[minGC] * k / std::max(1, minGC);
+    }
+    for (k = maxGC + 1; k <= 100; k++) {
+        int denom = std::max(1, 100 - maxGC);
+        gcMeans[k] = gcMeans[maxGC] - gcMeans[maxGC] * (k - maxGC) / denom;
+    }
+
+    /* compute standard deviation safely */
+    if (indxs.empty()) {
+        gcStd = 1.0e-5;
+    } else {
+        gcStd = 0.0;
+        for (int t = 0; t < (int)indxs.size(); t++) {
+            int idx = indxs[t];
+            k = std::min(std::max((int)(gcs[idx] * 100), 0), 100);
+            gcStd += pow(readCounts[idx] - gcMeans[k], 2);
+        }
+        gcStd = sqrt(gcStd / std::max<size_t>(1, indxs.size()));
+        if (!std::isfinite(gcStd) || gcStd <= 0.0) gcStd = 1.0e-5;
+    }
+    std::cerr << "\nread counts std: " << gcStd << std::endl;
+
+    delete[] steps;
+    gcs.clear();
+    readCounts.clear();
 }
 
 void Profile::normParas(bool isLoaded) {
@@ -920,37 +930,46 @@ void Profile::normParas(bool isLoaded) {
 		delRate /= baseCount;
 		cerr << "insert rate: " << insertRate << ", deletion rate: " << delRate << endl;
 	}
-	else {
-		baseAlphabet.resize(1, N, false);
-		for(i = 0; i < N; i++) {
-			baseAlphabet.set(0, i, i);
-		}
-		int baseQualtiyCount = maxBaseQuality-minBaseQuality+1;
-		qualityAlphabet.resize(1, baseQualtiyCount, false);
-		for(i = 0, j = minBaseQuality; i < baseQualtiyCount; i++, j++) {
-			qualityAlphabet.set(0, i, j);
-		}
-	
-		if(config.isPairedEnd() && stdISize > 0) {
-			int meanInsertSize = config.getIntPara("insertSize")+1;
-			int intervalLen = 6 * stdISize;
-			int minInsertSize = max(meanInsertSize - intervalLen/2, config.getIntPara("readLength"));
-			int maxInsertSize = 2*meanInsertSize - minInsertSize;
-			//cerr << stdISize << endl;
-			//cerr << minInsertSize << '\t' << maxInsertSize << '\t' << meanInsertSize << endl;
-			iSizeAlphabet.resize(1, maxInsertSize-minInsertSize+1, false);
-			for(i = 0; i < iSizeAlphabet.getCOLS(); i++) {
-				iSizeAlphabet.set(0, i, minInsertSize++);
-			}
-		
-			iSizeDist.resize(1, iSizeAlphabet.getCOLS(), false);
-			for(i = 0; i < iSizeDist.getCOLS(); i++) {
-				double pdf = normpdf(iSizeAlphabet.get(0, i), meanInsertSize, stdISize);
-				iSizeDist.set(0, i, pdf);
-			}
-			iSizeDist.normalize(0);
-		}
-	}
+    else {
+        baseAlphabet.resize(1, N, false);
+        for(i = 0; i < N; i++) {
+            baseAlphabet.set(0, i, i);
+        }
+        int baseQualtiyCount = maxBaseQuality-minBaseQuality+1;
+        qualityAlphabet.resize(1, baseQualtiyCount, false);
+        for(i = 0, j = minBaseQuality; i < baseQualtiyCount; i++, j++) {
+            qualityAlphabet.set(0, i, j);
+        }
+
+        if (config.isPairedEnd() && std::isfinite(stdISize) && stdISize > 0.0) {
+            double meanInsertSize = config.getIntPara("insertSize") + 1.0;
+            double intervalLenD   = 6.0 * stdISize;
+            if (!std::isfinite(intervalLenD) || intervalLenD <= 0.0) {
+                std::cerr << "Warning: invalid intervalLen; disabling insert-size modeling." << std::endl;
+                stdISize = 0.0;
+            } else {
+                int intervalLen   = static_cast<int>(std::min(intervalLenD, 1e6.0));
+                int minInsertSize = std::max(static_cast<int>(meanInsertSize - intervalLen/2),
+                                             config.getIntPara("readLength"));
+                int maxInsertSize = static_cast<int>(2*meanInsertSize) - minInsertSize;
+                if (maxInsertSize < minInsertSize) {
+                    std::cerr << "Warning: invalid insert-size bounds; disabling modeling." << std::endl;
+                    stdISize = 0.0;
+                } else {
+                    iSizeAlphabet.resize(1, maxInsertSize - minInsertSize + 1, false);
+                    for (int ii = 0; ii < iSizeAlphabet.getCOLS(); ++ii) {
+                        iSizeAlphabet.set(0, ii, minInsertSize + ii);
+                    }
+                    iSizeDist.resize(1, iSizeAlphabet.getCOLS(), false);
+                    for (int ii = 0; ii < iSizeDist.getCOLS(); ++ii) {
+                        double pdf = normpdf(iSizeAlphabet.get(0, ii), meanInsertSize, stdISize);
+                        iSizeDist.set(0, ii, pdf);
+                    }
+                    iSizeDist.normalize(0);
+                }
+            }
+        }
+    }
 }
 
 void Profile::load(string proFile) {
@@ -1534,13 +1553,12 @@ void Profile::train() {
     fclose(fp);
 
     int wxs = (genome.getInTargets().empty()) ? 0 : 1;
-    long minReadsRequired = 2000000;
-    double med_rc = median(readCounts);
-    if (med_rc < 5) {
-        cerr << "\nWarning: not enough reads to evaluate GC-content effects!" << endl;
+    double med_rc = readCounts.empty() ? 0.0 : median(readCounts);
+    if (med_rc < 5.0) {
+        std::cerr << "Warning: not enough reads to evaluate GC-content effects; using defaults." << std::endl;
         initGCParas();
     } else {
-        estimateGCParas();
+        estimateGCParas(); // now safe: it will bail out or clamp internally
     }
 
     // --- FIX START: enforce population of all k-mer substitution matrices ---
