@@ -948,7 +948,7 @@ void Profile::normParas(bool isLoaded) {
                 std::cerr << "Warning: invalid intervalLen; disabling insert-size modeling." << std::endl;
                 stdISize = 0.0;
             } else {
-                int intervalLen   = static_cast<int>(std::min(intervalLenD, 1e6.0));
+                int intervalLen   = static_cast<int>(std::min(intervalLenD, 1.0e6));
                 int minInsertSize = std::max(static_cast<int>(meanInsertSize - intervalLen/2),
                                              config.getIntPara("readLength"));
                 int maxInsertSize = static_cast<int>(2*meanInsertSize) - minInsertSize;
