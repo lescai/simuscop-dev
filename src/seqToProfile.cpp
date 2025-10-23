@@ -9,6 +9,9 @@
 #include <getopt.h>
 #include <ctime>
 
+#include <clocale>
+#include <fenv.h>
+
 #include "MyDefine.h"
 #include "Genome.h"
 #include "Profile.h"
@@ -17,6 +20,12 @@
 void usage(const char* app);
 
 int main(int argc, char *argv[]) {
+    // Force C locale and enable FP exception reporting
+    setlocale(LC_ALL, "C");
+    // feenableexcept is a GNU extension; guard for non-glibc platforms
+#if defined(__GLIBC__)
+    feenableexcept(FE_DIVBYZERO | FE_INVALID | FE_OVERFLOW);
+#endif
 	string bamFile = "", targetFile = "";
 	string vcfFile = "", refFile = "";
 	string outFile = "", samtools = "";

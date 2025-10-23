@@ -1205,6 +1205,11 @@ void Profile::load(string proFile) {
 					exit(1);
 				}
 				stdISize = atof(trim(line).c_str());
+				if (!std::isfinite(stdISize) || stdISize <= 0.0) {
+					std::cerr << "Warning: invalid stdISize (" << stdISize
+							  << ") in profile; disabling insert-size modeling." << std::endl;
+					stdISize = 0.0;
+				}
 			}
 			else {
 				cerr << "Error: malformed model file " << proFile << endl;
@@ -1392,7 +1397,8 @@ void Profile::saveResults() {
 	}
 	
 	(*ost) << "\n[Insert Size Standard Deviation]" << endl;
-	(*ost) << stdISize << endl;
+	double toWrite = (std::isfinite(stdISize) && stdISize > 0.0) ? stdISize : 0.0;
+	(*ost) << toWrite << endl;
 	
 	(*ost) << "\n[Log Ratio Mean Value]" << endl;
 	for(i = 0; i < 101; i++) {
